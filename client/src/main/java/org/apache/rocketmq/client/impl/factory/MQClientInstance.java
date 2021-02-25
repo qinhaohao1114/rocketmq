@@ -160,8 +160,11 @@ public class MQClientInstance {
     }
 
     public static TopicPublishInfo topicRouteData2TopicPublishInfo(final String topic, final TopicRouteData route) {
+        //创建TopicPublishInfo对象
         TopicPublishInfo info = new TopicPublishInfo();
+        //关联topicRoute
         info.setTopicRouteData(route);
+        //顺序消息,更新TopicPublishInfo
         if (route.getOrderTopicConf() != null && route.getOrderTopicConf().length() > 0) {
             String[] brokers = route.getOrderTopicConf().split(";");
             for (String broker : brokers) {
@@ -175,12 +178,17 @@ public class MQClientInstance {
 
             info.setOrderTopic(true);
         } else {
+            //非顺序消息更新TopicPublishInfo
             List<QueueData> qds = route.getQueueDatas();
             Collections.sort(qds);
+            //遍历topic队列信息
             for (QueueData qd : qds) {
+                //是否是写队列
                 if (PermName.isWriteable(qd.getPerm())) {
                     BrokerData brokerData = null;
+                    //遍历写队列Broker
                     for (BrokerData bd : route.getBrokerDatas()) {
+                        //根据名称获得读队列对应的Broker
                         if (bd.getBrokerName().equals(qd.getBrokerName())) {
                             brokerData = bd;
                             break;
@@ -194,7 +202,7 @@ public class MQClientInstance {
                     if (!brokerData.getBrokerAddrs().containsKey(MixAll.MASTER_ID)) {
                         continue;
                     }
-
+                    //封装TopicPublishInfo写队列
                     for (int i = 0; i < qd.getWriteQueueNums(); i++) {
                         MessageQueue mq = new MessageQueue(topic, qd.getBrokerName(), i);
                         info.getMessageQueueList().add(mq);
@@ -204,7 +212,7 @@ public class MQClientInstance {
 
             info.setOrderTopic(false);
         }
-
+       //返回TopicPublishInfo对象
         return info;
     }
 
@@ -259,6 +267,7 @@ public class MQClientInstance {
     }
 
     private void startScheduledTask() {
+        // 获取nameServer的地址
         if (null == this.clientConfig.getNamesrvAddr()) {
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
@@ -273,6 +282,7 @@ public class MQClientInstance {
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
 
+        // 更新topicRouteData，默认每30秒拉取一次
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -290,7 +300,9 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                    // 清理掉线的broker
                     MQClientInstance.this.cleanOfflineBroker();
+                    // 给broker发送心跳
                     MQClientInstance.this.sendHeartbeatToAllBrokerWithLock();
                 } catch (Exception e) {
                     log.error("ScheduledTask sendHeartbeatToAllBroker exception", e);
@@ -303,6 +315,7 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                    // 保存consumerOffset
                     MQClientInstance.this.persistAllConsumerOffset();
                 } catch (Exception e) {
                     log.error("ScheduledTask persistAllConsumerOffset exception", e);
@@ -315,6 +328,8 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                    // 根据processQueueTable的大小决定是否需要增加或者减少threadPool的大小
+                    // 目前尚未实现具体的增加或者减少的逻辑
                     MQClientInstance.this.adjustThreadPool();
                 } catch (Exception e) {
                     log.error("ScheduledTask adjustThreadPool exception", e);
@@ -608,13 +623,22 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 更新路由信息
+     * @param topic
+     * @param isDefault
+     * @param defaultMQProducer
+     * @return
+     */
     public boolean updateTopicRouteInfoFromNameServer(final String topic, boolean isDefault,
         DefaultMQProducer defaultMQProducer) {
         try {
             if (this.lockNamesrv.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
                     TopicRouteData topicRouteData;
+                    //使用默认主题从NameServer获取路由信息
                     if (isDefault && defaultMQProducer != null) {
+                        // TBW102
                         topicRouteData = this.mQClientAPIImpl.getDefaultTopicRouteInfoFromNameServer(defaultMQProducer.getCreateTopicKey(),
                             1000 * 3);
                         if (topicRouteData != null) {
@@ -625,9 +649,11 @@ public class MQClientInstance {
                             }
                         }
                     } else {
+                        //使用指定主题从NameServer获取路由信息
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
                     if (topicRouteData != null) {
+                        //判断路由是否需要更改
                         TopicRouteData old = this.topicRouteTable.get(topic);
                         boolean changed = topicRouteDataIsChange(old, topicRouteData);
                         if (!changed) {
@@ -645,13 +671,16 @@ public class MQClientInstance {
 
                             // Update Pub info
                             {
+                                //将topicRouteData转换为发布队列
                                 TopicPublishInfo publishInfo = topicRouteData2TopicPublishInfo(topic, topicRouteData);
                                 publishInfo.setHaveTopicRouterInfo(true);
+                                //遍历生产
                                 Iterator<Entry<String, MQProducerInner>> it = this.producerTable.entrySet().iterator();
                                 while (it.hasNext()) {
                                     Entry<String, MQProducerInner> entry = it.next();
                                     MQProducerInner impl = entry.getValue();
                                     if (impl != null) {
+                                        //生产者不为空时,更新publishInfo信息
                                         impl.updateTopicPublishInfo(topic, publishInfo);
                                     }
                                 }

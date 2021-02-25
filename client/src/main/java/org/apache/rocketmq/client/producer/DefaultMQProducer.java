@@ -77,32 +77,37 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      *
      * See {@linktourl http://rocketmq.apache.org/docs/core-concept/} for more discussion.
      */
+    //生产者所属组
     private String producerGroup;
 
     /**
      * Just for testing or demo program
      */
+    //默认Topic
     private String createTopicKey = MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC;
 
     /**
      * Number of queues to create per default topic.
+     * 默认主题在每一个Broker队列数量
      */
     private volatile int defaultTopicQueueNums = 4;
 
     /**
      * Timeout for sending messages.
+     * 发送消息默认超时时间，默认3s
      */
     private int sendMsgTimeout = 3000;
 
     /**
      * Compress message body threshold, namely, message body larger than 4k will be compressed on default.
+     消息体超过该值则启用压缩，默认4k
      */
     private int compressMsgBodyOverHowmuch = 1024 * 4;
 
     /**
      * Maximum number of retry to perform internally before claiming sending failure in synchronous mode.
      * </p>
-     *
+     *同步方式发送消息重试次数，默认为2，总共执行3次
      * This may potentially cause message duplication which is up to application developers to resolve.
      */
     private int retryTimesWhenSendFailed = 2;
@@ -110,18 +115,20 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * Maximum number of retry to perform internally before claiming sending failure in asynchronous mode.
      * </p>
-     *
+     *异步方法发送消息重试次数，默认为2
      * This may potentially cause message duplication which is up to application developers to resolve.
      */
     private int retryTimesWhenSendAsyncFailed = 2;
 
     /**
      * Indicate whether to retry another broker on sending failure internally.
+     * 消息重试时选择另外一个Broker时，是否不等待存储结果就返回，默认为false
      */
     private boolean retryAnotherBrokerWhenNotStoreOK = false;
 
     /**
      * Maximum allowed message size in bytes.
+     * 允许发送的最大消息长度，默认为4M
      */
     private int maxMessageSize = 1024 * 1024 * 4; // 4M
 
@@ -785,6 +792,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     @Override
     public SendResult send(
         Collection<Message> msgs) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+        //压缩消息集合成一条消息,然后发送出去
         return this.defaultMQProducerImpl.send(batch(msgs));
     }
 
@@ -829,16 +837,20 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     private MessageBatch batch(Collection<Message> msgs) throws MQClientException {
         MessageBatch msgBatch;
         try {
+            //将集合消息封装到MessageBatch
             msgBatch = MessageBatch.generateFromList(msgs);
+            //遍历消息集合,检查消息合法性,设置消息ID,设置Topic
             for (Message message : msgBatch) {
                 Validators.checkMessage(message, this);
                 MessageClientIDSetter.setUniqID(message);
                 message.setTopic(withNamespace(message.getTopic()));
             }
+            //压缩消息,设置消息body
             msgBatch.setBody(msgBatch.encode());
         } catch (Exception e) {
             throw new MQClientException("Failed to initiate the MessageBatch", e);
         }
+        //设置msgBatch的topic
         msgBatch.setTopic(withNamespace(msgBatch.getTopic()));
         return msgBatch;
     }

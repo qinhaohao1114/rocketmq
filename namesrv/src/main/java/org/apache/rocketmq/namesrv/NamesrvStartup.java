@@ -79,9 +79,13 @@ public class NamesrvStartup {
             return null;
         }
 
+        //创建NamesrvConfig
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
+        //创建NettyServerConfig
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+        //设置启动端口号
         nettyServerConfig.setListenPort(9876);
+        //解析启动-c参数
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
             if (file != null) {
@@ -97,14 +101,14 @@ public class NamesrvStartup {
                 in.close();
             }
         }
-
+        //解析启动-p参数
         if (commandLine.hasOption('p')) {
             InternalLogger console = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_CONSOLE_NAME);
             MixAll.printObjectProperties(console, namesrvConfig);
             MixAll.printObjectProperties(console, nettyServerConfig);
             System.exit(0);
         }
-
+        //将启动参数填充到namesrvConfig.nettyServerConfig
         MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
 
         if (null == namesrvConfig.getRocketmqHome()) {
@@ -119,10 +123,11 @@ public class NamesrvStartup {
         configurator.doConfigure(namesrvConfig.getRocketmqHome() + "/conf/logback_namesrv.xml");
 
         log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
-
+        //填充nameSerConfig参数
         MixAll.printObjectProperties(log, namesrvConfig);
+        //填充nettyServerConfig参数
         MixAll.printObjectProperties(log, nettyServerConfig);
-
+        //创建nameSrvController
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
         // remember all configs to prevent discard
@@ -136,13 +141,14 @@ public class NamesrvStartup {
         if (null == controller) {
             throw new IllegalArgumentException("NamesrvController is null");
         }
-
+        //初始化
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
 
+        //注册JVM钩子函数代码
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {

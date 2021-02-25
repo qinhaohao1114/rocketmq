@@ -858,9 +858,10 @@ public class BrokerController {
         }
 
 
-
+        //注册Broker信息
         this.registerBrokerAll(true, false, true);
 
+        //每隔30s上报Broker信息到NameServer
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
